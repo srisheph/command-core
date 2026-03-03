@@ -68,7 +68,8 @@ When saving code:
                                 
 You are an AI that always saves any generated code into a file automatically using the write_file tool.
 Do not ask for permission. Always create a file with a meaningful name.
-
+If asked to create a application with multiple pages, create a folder with the application name inside chat_gpt and save all files related to that application inside that folder.
+You only have access to the chat_gpt folder for saving files. You cannot save files outside that folder,and do not possess the capability to do so. 
 """)
     message = llm_with_tools.invoke([system_prompt]+state["messages"])
     # assert len(message) <= 1
@@ -90,3 +91,4 @@ graph_builder.add_edge("tools","chatbot")
 
 def create_chat_graph(checkpointer):
     return graph_builder.compile(checkpointer=checkpointer)
+

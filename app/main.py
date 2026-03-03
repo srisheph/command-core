@@ -7,15 +7,41 @@ from openai import OpenAI
 from openai.helpers import LocalAudioPlayer
 import asyncio
 from openai import AsyncOpenAI
-from langsmith import traceable
 
 load_dotenv()
 
-openai=AsyncOpenAI()
+openai_client=AsyncOpenAI()
+
 MONGODB_URI = "mongodb://admin:admin@localhost:27017/langgraph?authSource=admin"
 config={"configurable":{"thread_id":"thread_4"}}
 
-def main():
+async def generate_summary(action_report:str):
+    summary_prompt=f"""
+Summarize the following action report in 1-2 sentences in response to the user's query.
+Focus on what actions the assistant performed.
+
+Details:
+{action_report}
+""".strip()
+    
+    resp = await openai_client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": summary_prompt}],
+    )
+    return resp.choices[0].message.content.strip()
+
+async def speak(text:str):
+
+        async with openai_client.audio.speech.with_streaming_response.create(
+            model="gpt-4o-mini-tts",
+            voice="alloy",
+            input=text,
+            instructions="Positive and a cheerful tone",
+            response_format="pcm",
+        ) as response:
+            await LocalAudioPlayer().play(response)
+
+async def main():
      with MongoDBSaver.from_conn_string(MONGODB_URI) as checkpointer:
         graph=create_chat_graph(checkpointer=checkpointer)
         r=sr.Recognizer()
@@ -27,20 +53,30 @@ def main():
                 print("Say something!")
                 audio=r.listen(source)
                 print("Processing audio...")
+
                 sst = r.recognize_google(audio)
                 print("You said: " + sst)
+
+                final_message=None
+                
                 for event in graph.stream({"messages":[{"role":"user","content":sst}]},config,stream_mode="values"):
                     if "messages" in event:
-                        event["messages"][-1].pretty_print()
+                        msg=event["messages"][-1]
+                        msg.pretty_print()
+                        final_message=msg
 
-# async def speak(text:str):
-#         async with openai.audio.speech.with_streaming_response.create(
-#             model="gpt-4o-mini-tts",
-#             voice="coral",
-#             input=text,
-#             instructions="Agitated and stressed.",
-#             response_format="pcm",
-#         ) as response:
-#             await LocalAudioPlayer().play(response)
-    
-main()
+                if final_message and getattr(final_message,"content",None):
+                    assistant_response=final_message.content
+
+                    action_report=f"""
+                    User Query: {sst}
+                    Assistant Response: {assistant_response}
+                    """.strip()
+
+                    summary = await generate_summary(action_report)
+                    print("Summary:", summary)
+                    await speak(summary)
+                        
+
+if __name__=="__main__":
+    asyncio.run(main())
