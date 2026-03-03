@@ -7,6 +7,7 @@ from openai import OpenAI
 from openai.helpers import LocalAudioPlayer
 import asyncio
 from openai import AsyncOpenAI
+from langsmith import traceable
 
 load_dotenv()
 

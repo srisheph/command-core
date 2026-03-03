@@ -8,15 +8,20 @@ from langgraph.prebuilt import ToolNode,tools_condition
 from dotenv import load_dotenv
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage
+import openai
+from langsmith.wrappers import wrap_openai
+from langsmith import traceable
 
 load_dotenv()
 
+client = wrap_openai(openai.Client())
 
 class State(TypedDict):
     messages:Annotated[list,add_messages]
 
 
 @tool
+@traceable(name="tool_run_command")
 def write_file(filename: str, content: str):
     """Save code into a file inside chat_gpt folder."""
     os.makedirs("chat_gpt", exist_ok=True)
@@ -30,6 +35,7 @@ def write_file(filename: str, content: str):
     return f"File written successfully to {path}"
 
 @tool
+@traceable(name="tool_run_command") 
 def run_command(cmd:str):
     """Takes a command line prompt and executes it on the user's machine and
        returns the result of the command.
@@ -45,6 +51,7 @@ def run_command(cmd:str):
 llm=init_chat_model(model_provider="openai", model="gpt-4.1")
 llm_with_tools=llm.bind_tools(tools=[run_command,write_file])
 
+@traceable(name="chatbot_node")
 def chatbot(state:State) :
     system_prompt=SystemMessage(content="""
 You are an AI coding assistant.
@@ -80,8 +87,6 @@ graph_builder.add_conditional_edges(
 )
 graph_builder.add_edge("tools","chatbot")
 # graph_builder.add_edge("chatbot",END)
-
-# 
 
 def create_chat_graph(checkpointer):
     return graph_builder.compile(checkpointer=checkpointer)
